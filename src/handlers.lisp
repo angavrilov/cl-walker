@@ -521,4 +521,4 @@
     (setf (body-of load-time-value) (walk-form (second form)))))
 
 (defunwalker-handler load-time-value-form (body read-only)
-  `(load-time-value ,(unwalk-form body) ,read-only))
+  `(load-time-value ,(unwalk-form body) ,@(if read-only '(t))))

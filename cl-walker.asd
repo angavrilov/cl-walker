@@ -28,6 +28,7 @@
                              #+lispworks(:file "lexenv-lispworks" :depends-on ("duplicates" "package"))
                              #+allegro(:file "lexenv-allegro" :depends-on ("duplicates" "package"))
                              #+openmcl(:file "lexenv-openmcl" :depends-on ("duplicates" "package"))
+                             #+ecl(:file "lexenv-ecl" :depends-on ("duplicates" "package"))
                              (:file "lexenv-late" :depends-on ("package" "duplicates"
                                                                #+sbcl "lexenv-sbcl"))
                              (:file "infrastructure" :depends-on ("package" "lexenv-late" "duplicates"))
