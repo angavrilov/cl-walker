@@ -41,13 +41,16 @@
 (defun unwalk-forms (forms)
   (mapcar #'unwalk-form forms))
 
-(defun special-variable-name? (name)
+(defun special-variable-name? (name &optional lexenv)
+  (declare (ignorable lexenv))
   (and (symbolp name)
        (not (keywordp name))
        (not (member name '(t nil) :test #'eq))
        (or (boundp name)
            #+sbcl(eq (sb-int:info :variable :kind name) :special)
            #+lispworks(eq (cl::variable-information name) :special)
+           #+openmcl (or (ccl-proclaimed-special-p name lexenv)
+                         (ccl-defined-const-p name lexenv))
            ;; This is the only portable way to check if a symbol is
            ;; declared special, without being boundp, i.e. (defvar 'foo).
            ;; Maybe we should make it optional with a compile-time flag?
@@ -110,7 +113,9 @@
   (let ((class-direct-subclasses (or (and (find-package :closer-mop)
                                           (find-symbol (symbol-name '#:class-direct-subclasses) :closer-mop))
                                      #+sbcl 'sb-mop:class-direct-subclasses
-                                     #-sbcl (error "Please provide a CLASS-DIRECT-SUBCLASSES for your lisp or load closer-mop"))))
+                                     #+openmcl 'ccl:class-direct-subclasses
+                                     #-(or sbcl openmcl)
+                                     (error "Please provide a CLASS-DIRECT-SUBCLASSES for your lisp or load closer-mop"))))
     (remove-duplicates
      (remove-if (lambda (class)
                   (not (eq (symbol-package (class-name class)) #.(find-package :cl-walker))))

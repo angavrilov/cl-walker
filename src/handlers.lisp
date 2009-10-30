@@ -60,7 +60,7 @@
          (walk-form (lookup-in-walkenv :symbol-macro form env) parent env)))
       ((symbol-macro-name? form lexenv)
        (walk-form (walker-macroexpand-1 form lexenv) parent env))
-      ((or (special-variable-name? form)
+      ((or (special-variable-name? form lexenv)
            (loop
               :for node = parent :then (parent-of node)
               :while node
@@ -215,7 +215,7 @@
       (declare (ignore b e d))
       (loop
          :for (var . value) :in (bindings-of let)
-         :do (unless (or (special-variable-name? var)
+         :do (unless (or (special-variable-name? var (cdr env))
                          (find-if (lambda (declaration)
                                     (and (typep declaration 'special-variable-declaration-form)
                                          (eq var (name-of declaration))))
