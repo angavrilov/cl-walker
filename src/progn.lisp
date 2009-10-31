@@ -19,6 +19,27 @@
   ((bindings :accessor bindings-of :initarg :bindings)))
 
 
+(defun find-by-name (name list &key (type 't))
+  (find-if (lambda (item)
+             (and item
+                  (or (eql type t)
+                      (typep item type))
+                  (eql (name-of item) name)))
+           list))
+
+(defclass binding-entry-mixin ()
+  ((name :accessor name-of :initarg :name)))
+
+(defclass variable-binding-entry-form (walked-form binding-entry-mixin)
+  ((value :accessor value-of :initarg :value)
+   (specialp :accessor special-binding? :initform nil)))
+
+(defunwalker-handler variable-binding-entry-form (name value)
+  (if value
+      `(,name ,(unwalk-form value))
+      name))
+
+
 (defclass declaration-form (walked-form)
   ())
 

@@ -37,7 +37,7 @@
   ())
 
 (defclass walked-lexical-variable-reference-form (lexical-variable-reference-form)
-  ()
+  ((binding :accessor binding-of :initarg :binding))
   (:documentation "A reference to a local variable defined in the lexical environment inside the form passed to walk-form."))
 
 (defclass unwalked-lexical-variable-reference-form (lexical-variable-reference-form)
@@ -66,15 +66,13 @@
               :while node
               :do (progn
                     (when (and (typep node 'implicit-progn-with-declare-mixin)
-                               (progn
-                                 (find-if (lambda (declare)
-                                            (and (typep declare 'special-variable-declaration-form)
-                                                 (eq (name-of declare) form)))
-                                          (declares-of node))))
+                               (find-by-name form (declares-of node)
+                                             :type 'special-variable-declaration-form))
                       (return t)))))
        (make-form-object 'special-variable-reference-form parent :name form))
       ((lookup-in-walkenv :variable form env)
-       (make-form-object 'walked-lexical-variable-reference-form parent :name form))
+       (make-form-object 'walked-lexical-variable-reference-form parent :name form
+                         :binding (lookup-in-walkenv :variable form env)))
       ((lookup-in-walkenv :unwalked-variable form env)
        (make-form-object 'unwalked-lexical-variable-reference-form parent :name form))
       (t
@@ -201,33 +199,40 @@
 (defclass let-form (variable-binding-form)
   ())
 
+(defun parse-var-binding (binding parent env)
+  (with-current-form binding
+    (destructuring-bind (var &optional (initial-value nil init-set-p))
+        (ensure-list binding)
+      (with-form-object (bind 'variable-binding-entry-form parent
+                              :name var :value nil)
+        (when init-set-p
+          (setf (value-of bind) (walk-form initial-value bind env)))
+        bind))))
+
+(defun add-var-binding-to-env (env bind declarations)
+  (let ((var (name-of bind)))
+    (if (or (special-variable-name? var (cdr env))
+            (find-by-name var declarations
+                          :type 'special-variable-declaration-form))
+        (prog1 env
+          (setf (special-binding? bind) t))
+        (augment-walkenv env :variable var bind))))
+
 (defwalker-handler let (form parent env)
   (with-form-object (let 'let-form parent)
     (setf (bindings-of let) (mapcar (lambda (binding)
-                                      (when binding
-                                        (with-current-form binding
-                                          (destructuring-bind (var &optional initial-value)
-                                              (ensure-list binding)
-                                            (cons var (walk-form initial-value let env))))))
-                                    (second form)))
+                                      (parse-var-binding binding let env))
+                                    (remove-if #'null (second form))))
     (multiple-value-bind (b e d declarations)
         (split-body (cddr form) env :parent let :declare t)
       (declare (ignore b e d))
-      (loop
-         :for (var . value) :in (bindings-of let)
-         :do (unless (or (special-variable-name? var (cdr env))
-                         (find-if (lambda (declaration)
-                                    (and (typep declaration 'special-variable-declaration-form)
-                                         (eq var (name-of declaration))))
-                                  declarations))
-               ;; TODO audit this part, :dummy? check other occurrances, too!
-               (augment-walkenv! env :variable var :dummy)))
-      (walk-implict-progn let (cddr form) env :declare t))))
+      (let ((env (reduce (lambda (env bind)
+                            (add-var-binding-to-env env bind declarations))
+                         (bindings-of let) :initial-value env)))
+        (walk-implict-progn let (cddr form) env :declare t)))))
 
 (defunwalker-handler let-form (bindings body declares)
-  `(let ,(mapcar (lambda (bind)
-                   (list (car bind) (unwalk-form (cdr bind))))
-                 bindings)
+  `(let ,(mapcar #'unwalk-form bindings)
      ,@(unwalk-declarations declares)
      ,@(unwalk-forms body)))
 
@@ -237,16 +242,18 @@
 (defwalker-handler let* (form parent env)
   (with-form-object (let* 'let*-form parent
                           :bindings '())
-    (dolist* ((var &optional initial-value) (mapcar #'ensure-list (second form)))
-      (push (cons var (walk-form initial-value let* env)) (bindings-of let*))
-      (augment-walkenv! env :variable var :dummy))
-    (setf (bindings-of let*) (nreverse (bindings-of let*)))
-    (walk-implict-progn let* (cddr form) env :declare t)))
+    (multiple-value-bind (b e d declarations)
+        (split-body (cddr form) env :parent let* :declare t)
+      (declare (ignore b e d))
+      (dolist (binding (remove-if #'null (second form)))
+        (let ((bind (parse-var-binding binding let* env)))
+          (push bind (bindings-of let*))
+          (setf env (add-var-binding-to-env env bind declarations))))
+      (setf (bindings-of let*) (nreverse (bindings-of let*)))
+      (walk-implict-progn let* (cddr form) env :declare t))))
 
 (defunwalker-handler let*-form (bindings body declares)
-  `(let* ,(mapcar (lambda (bind)
-                    (list (car bind) (unwalk-form (cdr bind))))
-                  bindings)
+  `(let* ,(mapcar #'unwalk-form bindings)
      ,@(unwalk-declarations declares)
      ,@(unwalk-forms body)))
 

@@ -93,6 +93,8 @@
    #:implicit-progn-with-declare-mixin
    #:binding-form-mixin
    #:bindings-of
+   #:binding-entry-mixin
+   #:variable-binding-entry-form
    #:declaration-form
    #:optimize-declaration-form
    #:variable-declaration-form
@@ -168,6 +170,7 @@
    #:walk-lambda-list
    #:walk-implict-progn
    #:body-of
+   #:binding-of
    #:cleanup-form-of
    #:code-of
    #:condition-of
@@ -188,6 +191,7 @@
    #:result-of
    #:source-of
    #:specializer-of
+   #:special-binding?
    #:supplied-p-parameter
    #:tag-of
    #:target-block-of

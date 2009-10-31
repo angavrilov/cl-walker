@@ -35,6 +35,8 @@
    (implicit-progn-mixin      body-of)
    (binding-form-mixin        bindings-of)
 
+   (variable-binding-entry-form value-of)
+
    (return-from-form result-of)
    (throw-form                value-of)
    (if-form                   condition-of then-of else-of)
