@@ -39,6 +39,15 @@
       `(,name ,(unwalk-form value))
       name))
 
+;; Macros are expanded right away, so no reference links.
+;; Used only so that binding-of always contains a list
+;; of binding-entry-mixin objects.
+(defclass macro-binding-entry-form (walked-form binding-entry-mixin)
+  ((value :accessor value-of :initarg :value)))
+
+(defclass symbol-macro-binding-entry-form (walked-form binding-entry-mixin)
+  ((value :accessor value-of :initarg :value)))
+
 
 (defclass declaration-form (walked-form)
   ())

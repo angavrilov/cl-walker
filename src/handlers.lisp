@@ -282,7 +282,10 @@
     (dolist* ((name args &body body) (second form))
       (let ((handler (parse-macro-definition name args body (cdr env))))
         (augment-walkenv! env :macro name handler)
-        (push (cons name handler) (bindings-of macrolet))))
+        (push (make-form-object 'macro-binding-entry-form
+                                macrolet
+                                :name name :value handler)
+              (bindings-of macrolet))))
     (setf (bindings-of macrolet) (nreverse (bindings-of macrolet)))
     (walk-implict-progn macrolet (cddr form) env :declare t)))
 
@@ -420,7 +423,10 @@
                                      :bindings '())
     (dolist* ((symbol expansion) (second form))
       (augment-walkenv! env :symbol-macro symbol expansion)
-      (push (cons symbol expansion) (bindings-of symbol-macrolet)))
+      (push (make-form-object 'symbol-macro-binding-entry-form
+                              symbol-macrolet
+                              :name symbol :value expansion)
+            (bindings-of symbol-macrolet)))
     (setf (bindings-of symbol-macrolet) (nreverse (bindings-of symbol-macrolet)))
     (walk-implict-progn symbol-macrolet (cddr form) env :declare t)))
 

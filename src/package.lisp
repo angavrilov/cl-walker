@@ -156,12 +156,14 @@
    #:let*-form
    #:locally-form
    #:macrolet-form
+   #:macro-binding-entry-form
    #:multiple-value-call-form
    #:multiple-value-prog1-form
    #:progn-form
    #:progv-form
    #:setq-form
    #:symbol-macrolet-form
+   #:symbol-macro-binding-entry-form
    #:tagbody-form
    #:go-tag-form
    #:go-form
