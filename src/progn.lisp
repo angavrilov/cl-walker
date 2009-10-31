@@ -28,7 +28,8 @@
            list))
 
 (defclass binding-entry-mixin ()
-  ((name :accessor name-of :initarg :name)))
+  ((name :accessor name-of :initarg :name)
+   (usages :accessor usages-of :initarg :usages)))
 
 (defclass variable-binding-entry-form (walked-form binding-entry-mixin)
   ((value :accessor value-of :initarg :value)

@@ -58,6 +58,7 @@
    ;;; some utils
    ;;;
    #:collect-variable-references
+   #:compute-binding-usages
    #:special-variable-name?
 
    ;;;
@@ -95,6 +96,7 @@
    #:binding-form-mixin
    #:bindings-of
    #:binding-entry-mixin
+   #:usages-of
    #:variable-binding-entry-form
    #:declaration-form
    #:optimize-declaration-form
