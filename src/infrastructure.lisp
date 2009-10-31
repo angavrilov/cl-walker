@@ -342,10 +342,15 @@
 
 (defclass walked-form ()
   ((parent :accessor parent-of :initarg :parent)
-   (source :initform *current-form* :accessor source-of :initarg :source)))
+   (source :initform *current-form* :accessor source-of :initarg :source)
+   (properties :initform nil :accessor form-properties :initarg :properties)))
 
 (defmethod make-load-form ((object walked-form) &optional env)
   (make-load-form-saving-slots object :environment env))
+
+(defmacro form-attr (form tag &optional defval)
+  "Access the property list of a form."
+  `(getf (form-properties ,form) ,tag ,defval))
 
 (defprint-object walked-form
   (if (and (slot-boundp -self- 'source)
