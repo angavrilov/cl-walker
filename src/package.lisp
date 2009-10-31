@@ -132,6 +132,7 @@
 
    #:function-form
    #:lambda-function-form
+   #:labels-function-form
    #:function-argument-form
    #:required-function-argument-form
    #:specialized-function-argument-form

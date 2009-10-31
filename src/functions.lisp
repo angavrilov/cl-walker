@@ -98,29 +98,41 @@
      ,@(unwalk-declarations declares)
      ,@(unwalk-forms body))))
 
-(defclass function-definition-form (lambda-function-form)
-  ((name :accessor name-of :initarg :name)))
+(defclass function-definition-form (lambda-function-form binding-entry-mixin)
+  ())
+
+(defun env-with-function (env func)
+  (augment-walkenv env :function (name-of func) func))
 
 (defwalker-handler defun (form parent env)
   (with-form-object (node 'function-definition-form parent
                           :name (second form))
     (walk-lambda-like node (third form)
-                      (nthcdr 3 form) env)))
+                      (nthcdr 3 form)
+                      (env-with-function env node))))
 
 (defunwalker-handler function-definition-form (form name arguments body declares)
   `(defun ,name ,(unwalk-lambda-list arguments) 
      ,@(unwalk-declarations declares)
      ,@(unwalk-forms body)))
 
-(defclass named-lambda-function-form (lambda-function-form)
-  ((special-form :accessor special-form-of :initarg :special-form)
-   (name :accessor name-of :initarg :name)))
+(defclass named-lambda-function-form (lambda-function-form binding-entry-mixin)
+  ((special-form :accessor special-form-of :initarg :special-form)))
 
 (defunwalker-handler named-lambda-function-form (special-form name arguments body declares)
   `(function
     (,special-form ,name ,(unwalk-lambda-list arguments)
      ,@(unwalk-declarations declares)
      ,@(unwalk-forms body))))
+
+(defclass labels-function-form (lambda-function-form binding-entry-mixin)
+  ())
+
+(defunwalker-handler labels-function-form (form name arguments body declares)
+  `(,name ,(unwalk-lambda-list arguments)
+     ,@(unwalk-declarations declares)
+     ,@(unwalk-forms body)))
+
 
 (defclass function-object-form (walked-form)
   ((name :accessor name-of :initarg :name)))
@@ -132,7 +144,7 @@
   ())
 
 (defclass walked-lexical-function-object-form (lexical-function-object-form)
-  ())
+  ((binding :accessor binding-of :initarg :binding)))
 
 (defclass unwalked-lexical-function-object-form (lexical-function-object-form)
   ())
@@ -153,16 +165,20 @@
                                :special-form (first named-lambda-form)
                                :name (second named-lambda-form))
          (walk-lambda-like node (third named-lambda-form)
-                           (nthcdr 3 named-lambda-form) env))))
+                           (nthcdr 3 named-lambda-form)
+                           (env-with-function env node)))))
     (t
      ;; (function foo)
-     (make-form-object (if (lookup-in-walkenv :function (second form) env)
-                           'walked-lexical-function-object-form
-                           (if (lookup-in-walkenv :unwalked-function (second form) env)
-                               'unwalked-lexical-function-object-form
-                               'free-function-object-form))
-                       parent
-                       :name (second form)))))
+     (let* ((name    (second form))
+            (binding (lookup-in-walkenv :function name env)))
+       (if binding
+           (make-form-object 'walked-lexical-function-object-form
+                             parent :name name :binding binding)
+           (make-form-object (if (lookup-in-walkenv :unwalked-function (second form) env)
+                                 'unwalked-lexical-function-object-form
+                                 'free-function-object-form)
+                             parent
+                             :name name))))))
 
 (defun walk-lambda (form parent env)
   (with-current-form form
@@ -203,8 +219,8 @@
                                (extend-env parsed)))))
       (values (nreverse result) env))))
 
-(defclass function-argument-form (walked-form)
-  ((name :accessor name-of :initarg :name)))
+(defclass function-argument-form (walked-form binding-entry-mixin)
+  ())
 
 (defprint-object function-argument-form
   (format t "~S" (name-of -self-)))
@@ -342,27 +358,25 @@
     (with-form-object (flet 'flet-form parent)
       ;; build up the objects for the bindings in the original env
       (loop
-         :for (name args . body) :in binds
-         :collect (cons name (with-form-object (lambda-node 'lambda-function-form flet)
-                               (walk-lambda-like lambda-node args body env))) :into bindings
+         :for binding :in binds
+         :for (name args . body) = binding
+         :collect (with-current-form binding
+                    (with-form-object
+                        (lambda-node 'labels-function-form flet :name name)
+                      (walk-lambda-like lambda-node args body env)))
+         :into bindings
          :finally (setf (bindings-of flet) bindings))
       ;; walk the body in the new env
       (walk-implict-progn flet
                           body
-                          (loop
-                             :with env = env
-                             :for (name . lambda) :in (bindings-of flet)
-                             :do (augment-walkenv! env :function name lambda)
-                             :finally (return env))
+                          (reduce #'env-with-function
+                                  (bindings-of flet)
+                                  :initial-value env)
                           :declare t))))
 
 ;; TODO factor out stuff in flet-form and labels-form
 (defunwalker-handler flet-form (bindings body declares)
-  `(flet ,(mapcar (lambda (bind)
-                    (cons (car bind)
-                          ;; remove (function (lambda ...)) of the function bindings
-                          (cdadr (unwalk-form (cdr bind)))))
-                  bindings)
+  `(flet ,(mapcar #'unwalk-form bindings)
      ,@(unwalk-declarations declares)
      ,@(unwalk-forms body)))
 
@@ -372,39 +386,30 @@
 (defwalker-handler labels (form parent env)
   (destructuring-bind (binds &body body)
       (cdr form)
-    (with-form-object (labels 'labels-form parent :bindings '())
+    (with-form-object (labels 'labels-form parent)
       ;; we need to walk over the bindings twice. the first pass
       ;; creates some 'empty' lambda objects in the environment so
       ;; that walked-lexical-application-form and walked-lexical-function-object-form
       ;; have something to point to. the second pass then walks the
       ;; actual bodies of the form filling in the previously created
       ;; objects.
+      (setf (bindings-of labels)
+            (loop
+               :for entry :in binds
+               :for lambda-node = (with-current-form entry
+                               (make-form-object 'labels-function-form
+                                                 labels
+                                                 :name (car entry)))
+               :collect lambda-node
+               :do (setf env (env-with-function env lambda-node))))
       (loop
-         :for entry :in binds
-         :for (name arguments . body) :in binds
-         :for lambda = (with-current-form entry
-                    (make-form-object 'lambda-function-form labels))
-         :do (progn
-               (push (cons name lambda) (bindings-of labels))
-               (augment-walkenv! env :function name lambda)))
-      (setf (bindings-of labels) (nreverse (bindings-of labels)))
-      (loop
-         :for form :in binds
-         :for (arguments . body) = (cdr form)
-         :for binding :in (bindings-of labels)
-         :for lambda = (cdr binding)
-         :for tmp-lambda = (walk-lambda `(lambda ,arguments ,@body) labels env)
-         :do (setf (body-of lambda) (body-of tmp-lambda)
-                   (arguments-of lambda) (arguments-of tmp-lambda)
-                   (declares-of lambda) (declares-of tmp-lambda)))
+         :for (nil args . body) :in binds
+         :for lambda-node :in (bindings-of labels)
+         :do (walk-lambda-like lambda-node args body env))
       (walk-implict-progn labels body env :declare t))))
 
 (defunwalker-handler labels-form (bindings body declares)
-  `(labels ,(mapcar (lambda (bind)
-                      (cons (car bind)
-                            ;; remove (function (lambda ...)) of the function bindings
-                            (cdadr (unwalk-form (cdr bind)))))
-                    bindings)
+  `(labels ,(mapcar #'unwalk-form bindings)
      ,@(unwalk-declarations declares)
      ,@(unwalk-forms body)))
 
