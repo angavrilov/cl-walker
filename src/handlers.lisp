@@ -81,8 +81,8 @@
 
 ;;;; BLOCK/RETURN-FROM
 
-(defclass block-form (walked-form implicit-progn-mixin)
-  ((name :accessor name-of :initarg :name)))
+(defclass block-form (walked-form implicit-progn-mixin binding-entry-mixin)
+  ())
 
 (defwalker-handler block (form parent env)
   (destructuring-bind (block-name &rest body)
@@ -453,35 +453,39 @@
       (loop
          :for part :on (body-of tagbody)
          :if (go-tag-p (car part))
-           :do (augment-walkenv! env :tag (car part) (cdr part)))
+         :do (progn
+               (augment-walkenv! env :tag (car part) part)
+               (setf (car part)
+                     (with-current-form (car part)
+                       (make-form-object 'go-tag-form tagbody
+                                         :name (car part))))))
       (loop
          :for part :on (body-of tagbody)
-         :if (go-tag-p (car part))
-         :do (setf (car part) (with-current-form (car part)
-                                (make-form-object 'go-tag-form tagbody
-                                                  :name (car part))))
-         :else
-           :do (setf (car part) (walk-form (car part) tagbody env))))))
+         :unless (typep (car part) 'walked-form)
+         :do (setf (car part) (walk-form (car part) tagbody env))))))
 
 (defunwalker-handler tagbody-form (body)
   `(tagbody ,@(unwalk-forms body)))
 
-(defclass go-tag-form (walked-form)
-  ((name :accessor name-of :initarg :name)))
+(defclass go-tag-form (walked-form binding-entry-mixin)
+  ())
 
 (defunwalker-handler go-tag-form (name)
   name)
 
 (defclass go-form (walked-form)
   ((jump-target :accessor jump-target-of :initarg :jump-target)
+   (jump-tag :accessor jump-tag-of :initarg :jump-tag)
    (name :accessor name-of :initarg :name)
    (enclosing-tagbody :accessor enclosing-tagbody-of :initarg :enclosing-tagbody)))
 
 (defwalker-handler go (form parent env)
-  (make-form-object 'go-form parent
-                    :name (second form)
-                    :jump-target (lookup-in-walkenv :tag (second form) env)
-                    :enclosing-tagbody (lookup-in-walkenv :tagbody 'enclosing-tagbody env)))
+  (let ((info (lookup-in-walkenv :tag (second form) env)))
+    (make-form-object 'go-form parent
+                      :name (second form)
+                      :jump-tag (car info)
+                      :jump-target (cdr info)
+                      :enclosing-tagbody (parent-of (car info)))))
 
 (defunwalker-handler go-form (name)
   `(go ,name))

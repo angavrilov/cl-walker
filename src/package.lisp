@@ -200,6 +200,7 @@
    #:tag-of
    #:target-block-of
    #:jump-target-of
+   #:jump-tag-of
    #:then-of
    ;;#:type-of
    #:value-of

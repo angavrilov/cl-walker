@@ -77,3 +77,17 @@
              (binding-of (default-value-of (second args)))))
     (is (eql (second args)
              (binding-of (default-value-of (third args)))))))
+
+(deftest test/utils/tagbody-ref ()
+  (let* ((ast (walk-form '(tagbody
+                           (tagbody
+                              (go a) (go b) a)
+                           b)))
+         (body1 (body-of ast))
+         (body2 (body-of (first body1)))
+         (go1 (first body2))
+         (go2 (second body2)))
+    (is (eql (jump-tag-of go1) (third body2)))
+    (is (eql (jump-tag-of go2) (second body1)))
+    (is (eql (enclosing-tagbody-of go1) (first body1)))
+    (is (eql (enclosing-tagbody-of go2) ast))))
