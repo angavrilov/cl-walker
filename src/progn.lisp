@@ -119,8 +119,7 @@
 (defvar *known-declaration-types* (append
                                    #+sbcl
                                    '(sb-ext:muffle-conditions
-                                     )
-                                   ))
+                                     sb-int:truly-dynamic-extent)))
 
 (defun walk-declaration (declaration environment parent)
   (let ((declares nil))
